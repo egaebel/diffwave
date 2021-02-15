@@ -13,23 +13,24 @@
 # limitations under the License.
 # ==============================================================================
 
+import json
 import numpy as np
 
 
 class AttrDict(dict):
-  def __init__(self, *args, **kwargs):
-      super(AttrDict, self).__init__(*args, **kwargs)
-      self.__dict__ = self
+    def __init__(self, *args, **kwargs):
+        super(AttrDict, self).__init__(*args, **kwargs)
+        self.__dict__ = self
 
-  def override(self, attrs):
-    if isinstance(attrs, dict):
-      self.__dict__.update(**attrs)
-    elif isinstance(attrs, (list, tuple, set)):
-      for attr in attrs:
-        self.override(attr)
-    elif attrs is not None:
-      raise NotImplementedError
-    return self
+    def override(self, attrs):
+        if isinstance(attrs, dict):
+            self.__dict__.update(**attrs)
+        elif isinstance(attrs, (list, tuple, set)):
+            for attr in attrs:
+                self.override(attr)
+        elif attrs is not None:
+            raise NotImplementedError
+        return self
 
 
 params = AttrDict(
@@ -37,17 +38,30 @@ params = AttrDict(
     batch_size=16,
     learning_rate=2e-4,
     max_grad_norm=None,
-
     # Data params
     sample_rate=22050,
     n_mels=80,
     n_fft=1024,
     hop_samples=256,
     crop_mel_frames=62,  # Probably an error in paper.
-
     # Model params
     residual_layers=30,
     residual_channels=64,
     dilation_cycle_length=10,
     noise_schedule=np.linspace(1e-4, 0.05, 50).tolist(),
 )
+
+
+def load_preset(preset_file_path):
+    with open(preset_file_path, "r") as preset_file:
+        json_string = "".join(
+            filter(lambda x: not x.strip().startswith("//"), preset_file.readlines())
+        )
+    json_dict = json.loads(json_string)
+    attr_dict = AttrDict(json_dict)
+    print_attr_dict(attr_dict)
+    return attr_dict
+
+
+def print_attr_dict(attr_dict):
+    print(f"attr_dict: '{attr_dict}'")
