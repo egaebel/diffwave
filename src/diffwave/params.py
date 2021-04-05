@@ -64,4 +64,4 @@ def load_preset(preset_file_path):
 
 
 def print_attr_dict(attr_dict):
-    print(f"attr_dict: '{attr_dict}'")
+    print(f"attr_dict: '{sorted(attr_dict.items())}'")

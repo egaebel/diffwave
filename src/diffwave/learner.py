@@ -38,13 +38,24 @@ def _nested_map(struct, map_fn):
 
 
 class DiffWaveLearner:
-    def __init__(self, model_dir, model, dataset, optimizer, params, *args, **kwargs):
+    def __init__(
+        self,
+        model_dir,
+        model,
+        dataset,
+        optimizer,
+        params,
+        checkpoint_to_load_from,
+        *args,
+        **kwargs,
+    ):
         os.makedirs(model_dir, exist_ok=True)
         self.model_dir = model_dir
         self.model = model
         self.dataset = dataset
         self.optimizer = optimizer
         self.params = params
+        self.checkpoint_to_load_from = checkpoint_to_load_from
         self.autocast = torch.cuda.amp.autocast(enabled=kwargs.get("fp16", False))
         self.scaler = torch.cuda.amp.GradScaler(enabled=kwargs.get("fp16", False))
         self.step = 0
@@ -75,14 +86,17 @@ class DiffWaveLearner:
             "scaler": self.scaler.state_dict(),
         }
 
-    def load_state_dict(self, state_dict):
+    def load_state_dict(self, state_dict, warm_start=False):
         if hasattr(self.model, "module") and isinstance(self.model.module, nn.Module):
             self.model.module.load_state_dict(state_dict["model"])
         else:
             self.model.load_state_dict(state_dict["model"])
         self.optimizer.load_state_dict(state_dict["optimizer"])
         self.scaler.load_state_dict(state_dict["scaler"])
-        self.step = state_dict["step"]
+        if warm_start:
+            self.step = 0
+        else:
+            self.step = state_dict["step"]
 
     def save_to_checkpoint(self, filename="weights"):
         save_basename = f"{filename}-{self.step}.pt"
@@ -98,8 +112,12 @@ class DiffWaveLearner:
 
     def restore_from_checkpoint(self, filename="weights"):
         try:
-            checkpoint = torch.load(f"{self.model_dir}/{filename}.pt")
-            self.load_state_dict(checkpoint)
+            if self.checkpoint_to_load_from:
+                checkpoint = torch.load(self.checkpoint_to_load_from)
+                self.load_state_dict(checkpoint, warm_start=True)
+            else:
+                checkpoint = torch.load(f"{self.model_dir}/{filename}.pt")
+                self.load_state_dict(checkpoint)
             return True
         except FileNotFoundError:
             return False
@@ -107,6 +125,7 @@ class DiffWaveLearner:
     def train(self, max_steps=None):
         device = next(self.model.parameters()).device
         while True:
+            print(f"len(self.dataset): '{len(self.dataset)}'")
             for features in (
                 tqdm(self.dataset, desc=f"Epoch {self.step // len(self.dataset)}")
                 if self.is_master
@@ -177,12 +196,18 @@ class DiffWaveLearner:
         self.summary_writer = writer
 
 
-def _train_impl(replica_id, model, dataset, args, params):
+def _train_impl(replica_id, model, dataset, args, params, checkpoint_to_load_from):
     torch.backends.cudnn.benchmark = True
     opt = torch.optim.Adam(model.parameters(), lr=params.learning_rate)
 
     learner = DiffWaveLearner(
-        args.model_dir, model, dataset, opt, params, fp16=args.fp16
+        args.model_dir,
+        model,
+        dataset,
+        opt,
+        params,
+        checkpoint_to_load_from,
+        fp16=args.fp16,
     )
     learner.is_master = replica_id == 0
     learner.restore_from_checkpoint()
@@ -194,7 +219,7 @@ def train(args, params):
         args.data_dirs, params, spec_filename_suffix=args.spec_filename_suffix
     )
     model = DiffWave(params).cuda()
-    _train_impl(0, model, dataset, args, params)
+    _train_impl(0, model, dataset, args, params, args.checkpoint)
 
 
 def train_distributed(replica_id, replica_count, port, args, params):
@@ -219,5 +244,5 @@ def train_distributed(replica_id, replica_count, port, args, params):
         ),
         args,
         params,
+        args.checkpoint,
     )
-

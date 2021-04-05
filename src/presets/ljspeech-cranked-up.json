@@ -1,14 +1,19 @@
 {
 "batch_size": 16,
 "learning_rate": 2e-4,
+// "batch_size": 32,
+// "learning_rate": 3.0e-4,
+// "batch_size": 48,
+// "learning_rate": 3.3e-4,
 "max_grad_norm": null,
 // Data params
 "sample_rate": 32000,
 "n_mels": 80,
 "n_fft": 4096,
+"window_length": 1024,
 "hop_samples": 256,
 // Probably an error in paper.
-"crop_mel_frames": 62,  
+"crop_mel_frames": 256,
 // Model params
 "residual_layers": 30,
 "residual_channels": 64,

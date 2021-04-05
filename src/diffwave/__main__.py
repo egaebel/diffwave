@@ -35,7 +35,7 @@ def main(args):
     if args.preset is not None:
         params_to_use = load_preset(args.preset)
     replica_count = device_count()
-    if replica_count > 1:
+    if replica_count > 1 and args.distributed:
         if params_to_use.batch_size % replica_count != 0:
             raise ValueError(
                 f"Batch size {params_to_use.batch_size} is not evenly divisble by # GPUs {replica_count}."
@@ -83,5 +83,17 @@ if __name__ == "__main__":
         default=None,
         type=str,
         help="file path to a json preset file to use for training/data parameters.",
+    )
+    parser.add_argument(
+        "--checkpoint",
+        default=None,
+        type=str,
+        help="file path to a checkpoint to load an existing model from.",
+    )
+    parser.add_argument(
+        "--distributed",
+        action="store_true",
+        default=False,
+        help="use multiple GPUs (if available) for training",
     )
     main(parser.parse_args())

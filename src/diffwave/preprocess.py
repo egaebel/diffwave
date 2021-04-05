@@ -34,7 +34,7 @@ def transform(filename):
 
     mel_args = {
         "sample_rate": sr,
-        "win_length": params.hop_samples * 4,
+        "win_length": params.window_length,
         "hop_length": params.hop_samples,
         "n_fft": params.n_fft,
         "f_min": 20.0,

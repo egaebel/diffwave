@@ -57,6 +57,7 @@ class DiffusionEmbedding(nn.Module):
 
     def forward(self, diffusion_step):
         x = self.embedding[diffusion_step]
+        in_x = x
         x = self.projection1(x)
         x = silu(x)
         x = self.projection2(x)
@@ -74,8 +75,16 @@ class DiffusionEmbedding(nn.Module):
 class SpectrogramUpsampler(nn.Module):
     def __init__(self, n_mels):
         super().__init__()
+        # NOTE: Below is my change, to run with 4096 fft size and 256 hop size.
+        """
+        self.conv1 = ConvTranspose2d(1, 1, [3, 32], stride=[1, 16], padding=[1, 4])
+        self.conv2 = ConvTranspose2d(1, 1, [3, 64], stride=[1, 16], padding=[1, 4])
+        #"""
+        # NOTE: Below is the original, with 1024 fft size and 256 hop size.
+        # """
         self.conv1 = ConvTranspose2d(1, 1, [3, 32], stride=[1, 16], padding=[1, 8])
         self.conv2 = ConvTranspose2d(1, 1, [3, 32], stride=[1, 16], padding=[1, 8])
+        # """
 
     def forward(self, x):
         x = torch.unsqueeze(x, 1)
@@ -88,7 +97,7 @@ class SpectrogramUpsampler(nn.Module):
 
 
 class ResidualBlock(nn.Module):
-    def __init__(self, n_mels, residual_channels, dilation):
+    def __init__(self, n_mels, residual_channels, dilation, index):
         super().__init__()
         self.dilated_conv = Conv1d(
             residual_channels,
@@ -100,6 +109,7 @@ class ResidualBlock(nn.Module):
         self.diffusion_projection = Linear(512, residual_channels)
         self.conditioner_projection = Conv1d(n_mels, 2 * residual_channels, 1)
         self.output_projection = Conv1d(residual_channels, 2 * residual_channels, 1)
+        self.index = index
 
     def forward(self, x, conditioner, diffusion_step):
         diffusion_step = self.diffusion_projection(diffusion_step).unsqueeze(-1)
@@ -129,6 +139,7 @@ class DiffWave(nn.Module):
                     params.n_mels,
                     params.residual_channels,
                     2 ** (i % params.dilation_cycle_length),
+                    i,
                 )
                 for i in range(params.residual_layers)
             ]
