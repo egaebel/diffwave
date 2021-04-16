@@ -17,6 +17,7 @@ import librosa
 import numpy as np
 import os
 import random
+import re
 import torch
 import torchaudio
 
@@ -40,32 +41,29 @@ class NumpyDataset(torch.utils.data.Dataset):
         self.spec_filename_suffix = spec_filename_suffix
         temp_file_names = []
         for path in paths:
-            temp_file_names += glob(f"{path}/**/*.wav", recursive=True)
+            temp_file_names += glob(
+                f"{path}/**/*{spec_filename_suffix}", recursive=True
+            )
         self.resampler_fn = None
         self.use_torchaudio = use_torchaudio
         if self.use_torchaudio:
             torch.set_num_threads(4)
             torch.set_num_interop_threads(4)
         self.crop_mel_frames = crop_mel_frames
+        self.duplicates_suffix_regex = duplicates_suffix_regex
+        print(
+            f"Will use regex: '{duplicates_suffix_regex}' for obtaining 'wav' files from duplicate mel spetrogram files."
+        )
         if filter_files_by_spectrogram_length and self.crop_mel_frames is not None:
             print(
                 f"Filtering '{len(temp_file_names)}' files by spectrogram length with max mel frames: '{self.crop_mel_frames}'.....",
                 flush=True,
             )
             filtered_file_names = list(
-                map(
-                    lambda x: x[0],
-                    filter(
-                        lambda x: np.load(x[1]).shape[1] >= self.crop_mel_frames,
-                        map(
-                            lambda x: (
-                                x,
-                                os.path.splitext(x)[0] + self.spec_filename_suffix,
-                            ),
-                            temp_file_names,
-                        ),
-                    ),
-                )
+                filter(
+                    lambda x: np.load(x).shape[1] >= self.crop_mel_frames,
+                    temp_file_names,
+                ),
             )
             print(
                 f"Finished filtering files by spectrogram length! Finished with '{len(filtered_file_names)}' files!",
@@ -79,9 +77,19 @@ class NumpyDataset(torch.utils.data.Dataset):
         return len(self.filenames)
 
     def __getitem__(self, idx):
+        """
         audio_filename = self.filenames[idx]
         audio_filename_without_extension, _ = os.path.splitext(audio_filename)
         spec_filename = f"{audio_filename_without_extension}{self.spec_filename_suffix}"
+        """
+        spec_filename = self.filenames[idx]
+        audio_filename = spec_filename[: -len(self.spec_filename_suffix)]
+        if self.duplicates_suffix_regex is not None:
+            audio_filename = re.sub(
+                self.duplicates_suffix_regex + "$", "", audio_filename
+            )
+        audio_filename += ".wav"
+
         spectrogram = np.load(spec_filename)
         if self.use_torchaudio:
             signal, signal_sample_rate = torchaudio.load_wav(audio_filename)
@@ -197,6 +205,9 @@ def from_path(
             duplicates_suffix_regex=duplicates_suffix_regex,
         )
     else:
+        print(
+            f"Creating dataset using spectrogram file name suffix: '{spec_filename_suffix}'"
+        )
         dataset = NumpyDataset(
             data_dirs,
             sample_rate=params.sample_rate,

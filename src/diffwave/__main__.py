@@ -70,6 +70,14 @@ if __name__ == "__main__":
         help="the suffix at the end of file names that hold the mel spectrograms.",
     )
     parser.add_argument(
+        "--duplicates_suffix_regex",
+        default=None,
+        type=str,
+        help="the suffix at the end of duplicate mel spectrogram file names. If passed then there "
+        "is expected to be multiple spectrograms for each 'wav' file and this suffix is used to convert "
+        "from spectrograms with a suffix at the end to the base wave file.",
+    )
+    parser.add_argument(
         "--max_steps", default=None, type=int, help="maximum number of training steps"
     )
     parser.add_argument(
